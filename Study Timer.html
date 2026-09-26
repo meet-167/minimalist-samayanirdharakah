@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Study Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #000000;
+    --surface: #141412;
+    --track: #1f1e1b;
+    --text: #f1efe8;
+    --text-dim: #7d7b73;
+    --focus: #d9a566;
+    --rest: #6fa898;
+  }
+  html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    overflow-x: hidden;
+  }
+  .app {
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 40px;
+  }
+  .mode-btn {
+    appearance: none;
+    border: 1px solid #232320;
+    background: var(--surface);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background .25s ease, color .25s ease, border-color .25s ease;
+  }
+  .mode-btn:hover { color: var(--text); }
+  .mode-btn:focus-visible, .icon-btn:focus-visible, .start-btn:focus-visible {
+    outline: 2px solid var(--text); outline-offset: 3px;
+  }
+  .mode-btn.active { color: #000; border-color: transparent; }
+  .mode-btn.active[data-mode="focus"] { background: var(--focus); }
+  .mode-btn.active[data-mode="short"] { background: var(--rest); }
+  .mode-btn.active[data-mode="long"] { background: var(--rest); }
+  .mode-btn.active[data-mode="custom"] { background: var(--focus); }
+
+  .timer-wrap {
+    position: relative;
+    width: min(280px, 72vw);
+    aspect-ratio: 1;
+  }
+  .ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 5; }
+  .ring .track { stroke: var(--track); }
+  .ring .progress {
+    stroke: var(--mode-color, var(--focus));
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear, stroke .3s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ring .progress { transition: stroke .3s ease; }
+  }
+  .center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .time {
+    font-family: 'Space Mono', 'SFMono-Regular', Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(44px, 13vw, 60px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .session-label {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .custom-adjust {
+    display: flex; align-items: center; gap: 14px;
+    margin-top: 18px;
+  }
+  .icon-btn {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 1px solid #232320; background: var(--surface); color: var(--text);
+    font-size: 16px; line-height: 1; cursor: pointer;
+  }
+  .custom-adjust span { font-family: 'Space Mono', monospace; font-size: 14px; min-width: 64px; text-align: center; color: var(--text-dim); }
+
+  .controls {
+    display: flex; align-items: center; gap: 20px;
+    margin-top: 36px;
+  }
+  .start-btn {
+    appearance: none; border: none; cursor: pointer;
+    background: var(--mode-color, var(--focus));
+    color: #000;
+    font-family: inherit; font-weight: 700; font-size: 15px;
+    padding: 14px 44px; border-radius: 999px;
+    transition: opacity .2s ease, transform .1s ease;
+  }
+  .start-btn:active { transform: scale(0.97); }
+  .reset-btn {
+    appearance: none; border: none; background: none; cursor: pointer;
+    color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px;
+  }
+  .reset-btn:hover { color: var(--text); }
+
+  .dots { display: flex; gap: 8px; margin-top: 30px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--track); transition: background .3s ease; }
+  .dot.filled { background: var(--focus); }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="modes" id="modes">
+      <button class="mode-btn active" data-mode="focus">Focus</button>
+      <button class="mode-btn" data-mode="short">Short break</button>
+      <button class="mode-btn" data-mode="long">Long break</button>
+      <button class="mode-btn" data-mode="custom">Custom</button>
+    </div>
+
+    <div class="timer-wrap" id="timerWrap">
+      <svg class="ring" viewBox="0 0 200 200">
+        <circle class="track" cx="100" cy="100" r="90"></circle>
+        <circle class="progress" id="progressCircle" cx="100" cy="100" r="90"></circle>
+      </svg>
+      <div class="center">
+        <div class="time" id="timeDisplay">25:00</div>
+        <div class="session-label" id="sessionLabel">Focus</div>
+      </div>
+    </div>
+
+    <div class="custom-adjust" id="customAdjust" hidden>
+      <button class="icon-btn" id="customMinus" aria-label="Decrease minutes">–</button>
+      <span id="customMinutes">45 min</span>
+      <button class="icon-btn" id="customPlus" aria-label="Increase minutes">+</button>
+    </div>
+
+    <div class="controls">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <button class="start-btn" id="startBtn">Start</button>
+    </div>
+
+    <div class="dots" id="dots"></div>
+  </div>
+
+<script>
+(function () {
+  const MODES = {
+    focus:  { label: 'Focus',       minutes: 25, color: '--focus' },
+    short:  { label: 'Short break', minutes: 5,  color: '--rest'  },
+    long:   { label: 'Long break',  minutes: 15, color: '--rest'  },
+    custom: { label: 'Custom',      minutes: 45, color: '--focus' }
+  };
+  const CIRC = 2 * Math.PI * 90;
+
+  const root = document.documentElement;
+  const progressCircle = document.getElementById('progressCircle');
+  const timerWrap = document.getElementById('timerWrap');
+  const timeDisplay = document.getElementById('timeDisplay');
+  const sessionLabel = document.getElementById('sessionLabel');
+  const startBtn = document.getElementById('startBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const customAdjust = document.getElementById('customAdjust');
+  const customMinutesEl = document.getElementById('customMinutes');
+  const dotsEl = document.getElementById('dots');
+  const modeButtons = document.querySelectorAll('.mode-btn');
+
+  progressCircle.style.strokeDasharray = CIRC;
+
+  let currentMode = 'focus';
+  let customMinutes = 45;
+  let totalSeconds = MODES.focus.minutes * 60;
+  let remainingSeconds = totalSeconds;
+  let endTime = null;
+  let intervalId = null;
+  let running = false;
+  let focusCyclesDone = 0;
+  const baseTitle = document.title;
+
+  let audioCtx = null;
+  function ctx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+  function tone(freq, start, dur, peak) {
+    const c = ctx();
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, c.currentTime + start);
+    gain.gain.linearRampToValueAtTime(peak, c.currentTime + start + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + start + dur);
+    osc.connect(gain).connect(c.destination);
+    osc.start(c.currentTime + start);
+    osc.stop(c.currentTime + start + dur + 0.05);
+  }
+  function playClick() { try { tone(360, 0, 0.08, 0.05); } catch (e) {} }
+  function playChime() {
+    try {
+      tone(523.25, 0,   0.9, 0.13);
+      tone(659.25, 0.12, 0.9, 0.11);
+      tone(783.99, 0.24, 1.1, 0.09);
+    } catch (e) {}
+  }
+
+  function fmt(s) {
+    const m = Math.floor(s / 60).toString().padStart(2, '0');
+    const sec = Math.floor(s % 60).toString().padStart(2, '0');
+    return m + ':' + sec;
+  }
+
+  function renderDots() {
+    dotsEl.innerHTML = '';
+    for (let i = 0; i < 4; i++) {
+      const d = document.createElement('div');
+      d.className = 'dot' + (i < focusCyclesDone % 4 ? ' filled' : '');
+      dotsEl.appendChild(d);
+    }
+  }
+
+  function applyModeColor() {
+    const cssVar = MODES[currentMode].color;
+    timerWrap.style.setProperty('--mode-color', getComputedStyle(root).getPropertyValue(cssVar));
+    startBtn.style.setProperty('--mode-color', getComputedStyle(root).getPropertyValue(cssVar));
+  }
+
+  function updateRing() {
+    const frac = totalSeconds === 0 ? 0 : remainingSeconds / totalSeconds;
+    progressCircle.style.strokeDashoffset = CIRC * (1 - frac);
+  }
+
+  function updateDisplay() {
+    timeDisplay.textContent = fmt(remainingSeconds);
+    sessionLabel.textContent = MODES[currentMode].label;
+    updateRing();
+    if (running) document.title = fmt(remainingSeconds) + ' · ' + MODES[currentMode].label;
+    else document.title = baseTitle;
+  }
+
+  function setMode(key, opts) {
+    opts = opts || {};
+    if (running && !opts.silent) pause();
+    currentMode = key;
+    modeButtons.forEach(b => b.classList.toggle('active', b.dataset.mode === key));
+    customAdjust.hidden = key !== 'custom';
+    const minutes = key === 'custom' ? customMinutes : MODES[key].minutes;
+    totalSeconds = minutes * 60;
+    remainingSeconds = totalSeconds;
+    applyModeColor();
+    updateDisplay();
+  }
+
+  function tick() {
+    remainingSeconds = Math.max(0, Math.round((endTime - Date.now()) / 1000));
+    updateDisplay();
+    if (remainingSeconds <= 0) {
+      clearInterval(intervalId);
+      running = false;
+      startBtn.textContent = 'Start';
+      playChime();
+      if (currentMode === 'focus') {
+        focusCyclesDone++;
+        renderDots();
+        setMode(focusCyclesDone % 4 === 0 ? 'long' : 'short', { silent: true });
+      } else {
+        setMode('focus', { silent: true });
+      }
+    }
+  }
+
+  function start() {
+    playClick();
+    running = true;
+    startBtn.textContent = 'Pause';
+    endTime = Date.now() + remainingSeconds * 1000;
+    intervalId = setInterval(tick, 250);
+  }
+
+  function pause() {
+    playClick();
+    running = false;
+    startBtn.textContent = 'Start';
+    clearInterval(intervalId);
+  }
+
+  function reset() {
+    playClick();
+    if (running) pause();
+    const minutes = currentMode === 'custom' ? customMinutes : MODES[currentMode].minutes;
+    totalSeconds = minutes * 60;
+    remainingSeconds = totalSeconds;
+    updateDisplay();
+  }
+
+  startBtn.addEventListener('click', () => running ? pause() : start());
+  resetBtn.addEventListener('click', reset);
+
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', () => setMode(btn.dataset.mode));
+  });
+
+  document.getElementById('customMinus').addEventListener('click', () => {
+    customMinutes = Math.max(5, customMinutes - 5);
+    customMinutesEl.textContent = customMinutes + ' min';
+    if (!running) { totalSeconds = customMinutes * 60; remainingSeconds = totalSeconds; updateDisplay(); }
+  });
+  document.getElementById('customPlus').addEventListener('click', () => {
+    customMinutes = Math.min(180, customMinutes + 5);
+    customMinutesEl.textContent = customMinutes + ' min';
+    if (!running) { totalSeconds = customMinutes * 60; remainingSeconds = totalSeconds; updateDisplay(); }
+  });
+
+  applyModeColor();
+  renderDots();
+  updateDisplay();
+})();
+</script>
+</body>
+</html>
